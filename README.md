@@ -5,8 +5,10 @@
 ## Usage
 
 1. Clone the repository to your local file system.
-2. Run `lein deps`
-3. Open a REPL and hack away!
+2. Open a REPL.
+3. Do: `(use 'lingo.core)`
+4. And: `(use 'lingo.features)`
+5. Hack away!
 
 core.clj holds most of the answers. You can do cool stuff like this:
 

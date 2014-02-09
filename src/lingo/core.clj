@@ -1,5 +1,5 @@
 (ns lingo.core
-  (:require [lingo.features :refer [feature]])
+  (:use [lingo.features :only [feature]])
   (:import (simplenlg.framework NLGFactory)
            (simplenlg.lexicon Lexicon)
            (simplenlg.realiser.english Realiser)
@@ -83,7 +83,7 @@
               [:subject "Fred"]))
 ;; => "Fred runs the race."
 
-(realise
+#_(realise
    (cons-clause
     (cons-clause
      (make-clause "Jack" "run" "the race")
@@ -100,7 +100,7 @@
         real (Realiser. lexi)
         clause (.createClause fact)]
     (doseq [t (seq table)]
-      (cons-fact [real clause] t))
+      (cons-clause [real clause] t))
     [real clause]))
 
 ;; The `feature` function is required from another
