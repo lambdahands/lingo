@@ -90,7 +90,7 @@
      [:subject "Fred"]) [:feature (feature :past :tense)]))
 ;; => "Fred ran the race."
 
-#_(defn gen-clause
+(defn gen-clause
   "Since Clojure is the bees knees, we can continue
   to build upon our functions in order to generate
   clauses out of persistent data structures."
