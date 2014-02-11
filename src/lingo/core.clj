@@ -1,10 +1,52 @@
 (ns lingo.core
-  (:use [lingo.features :only [feature]])
+  (:use [lingo.features :only [feature feature-fn]])
   (:import (simplenlg.framework NLGFactory)
-           (simplenlg.lexicon Lexicon)
+           (simplenlg.lexicon Lexicon XMLLexicon)
            (simplenlg.realiser.english Realiser)
            (simplenlg.phrasespec)
            (simplenlg.features Feature Tense)))
+
+(def lexicon (atom (Lexicon/getDefaultLexicon)))
+
+(defn set-xml-lexicon! [path]
+  (reset! lexicon (XMLLexicon. path)))
+
+(defn reset-lexicon! []
+  (reset! lexicon (Lexicon/getDefaultLexicon)))
+
+(defn noun
+  ([phrase]
+   (let [fact (NLGFactory. @lexicon)]
+     (.createNounPhrase fact phrase)))
+  ([determiner phrase]
+   (let [fact (NLGFactory. @lexicon)]
+     (.createNounPhrase fact determiner phrase))))
+
+(defn determiner [det phrase]
+  (.setDeterminer phrase det)
+  phrase)
+
+(defn verb
+  [phrase]
+  (let [fact (NLGFactory. @lexicon)]
+    (.createVerbPhrase fact phrase)))
+
+(defn modifier
+  ([modi phrase]
+   (modifier modi phrase :default))
+  ([modi phrase kind]
+   (condp = (name kind)
+     "front" (.addFrontModifier phrase modi)
+     "pre"   (.addPreModifier phrase modi)
+     "post"  (.addPostModifier phrase modi)
+     (.addModifier phrase modi))
+   phrase))
+
+(defn realise [[real clause]]
+  (.realiseSentence real clause))
+
+(defn realise! [phrase]
+  (realise [(Realiser. @lexicon) phrase]))
 
 (defn sentence
   "Create a simple sentence. This is the most
@@ -13,22 +55,10 @@
   an DocumentElement object. (We'll be using this
   pattern in further functions.)"
   [string]
-  (let [lexi (Lexicon/getDefaultLexicon)
+  (let [lexi @lexicon
         fact (NLGFactory. lexi)
         real (Realiser. lexi)]
     [real (.createSentence fact string)]))
-
-#_(sentence "my cat might be feral")
-;; => [#<Realiser simplenlg.realiser...> #<DocumentElement...>]
-
-(defn realise [[real sentence]]
-  (.realiseSentence real sentence))
-
-#_(realise (sentence "my cat might be feral"))
-;; => "My cat might be feral."
-
-;; I'm a LISP newbie (so by consequence a CS newbie).
-;; Forgive my horrible function naming.
 
 (defn make-clause
   "We add a subject verb and object to
@@ -36,7 +66,7 @@
   before, our clause can be mutated (yuck!)
   with additional subjects and objects."
   [subj verb obj]
-  (let [lexi (Lexicon/getDefaultLexicon)
+  (let [lexi @lexicon
         fact (NLGFactory. lexi)
         real (Realiser. lexi)]
     [real
@@ -45,74 +75,31 @@
        (.setVerb verb)
        (.setObject obj))]))
 
-#_(make-clause "Jack" "run" "race")
-;; => [#<Realiser simplenlg.realiser...> #<SPhraseSpec...>]
-
-;; We realise our clauses just as we did with setences.
-#_(realise (make-clause "Jack" "run" "the race"))
-;; => "Jack runs the race."
-
-(defn past-tense-clause [[real sentence]]
-  "Let's add features to our clause.
-  This is covered in Section IV, 'Verbs'
-  of the simplenlg tutorial."
-  (.setFeature sentence (Feature/TENSE) (Tense/PAST))
-  [real sentence])
-
-#_(realise (past-tense-clause (make-clause "Jack" "run" "the race")))
-;; => "Jack ran the race."
-
 (defn cons-clause
   "Let's have some fun. Here we are able to
   add or replace different parts of our clause."
-  [[real sentence] [k v]]
-  (cond
-   (= k :subject)
-   (.setSubject sentence v)
-   (= k :verb)
-   (.setVerb sentence v)
-   (= k :object)
-   (.setObject sentence v)
-   (= k :feature)
-   (let [[a b] v]
-     (.setFeature sentence a b)))
-  [real sentence])
-
-#_(realise
- (cons-clause (make-clause "Jack" "run" "the race")
-              [:subject "Fred"]))
-;; => "Fred runs the race."
-
-#_(realise
-   (cons-clause
-    (cons-clause
-     (make-clause "Jack" "run" "the race")
-     [:subject "Fred"]) [:feature (feature :past :tense)]))
-;; => "Fred ran the race."
+  [[real clause] [k v]]
+  (condp = k
+    :subject (.setSubject clause v)
+    :verb    (.setVerb clause v)
+    :object  (.setObject clause v)
+    :features
+    (doseq [[a b] v]
+      (.setFeature clause a b))
+    :complements
+    (doseq [compl v]
+      (.addComplement clause compl)))
+  [real clause])
 
 (defn gen-clause
   "Since Clojure is the bees knees, we can continue
   to build upon our functions in order to generate
   clauses out of persistent data structures."
   [table]
-  (let [lexi (Lexicon/getDefaultLexicon)
+  (let [lexi @lexicon
         fact (NLGFactory. lexi)
         real (Realiser. lexi)
         clause (.createClause fact)]
     (doseq [t (seq table)]
       (cons-clause [real clause] t))
     [real clause]))
-
-;; The `feature` function is required from another
-;; namespace. There lots of work to be done there, but
-;; the function is much more idiomatic than the Java way.
-
-#_(realise (gen-clause
-  {:subject "Fred"
-   :verb "run"
-   :object "the race"
-   :feature (feature :how :?)}))
-;; => "How does Fred run the race?"
-
-;; We need to allow for a :features key that
-;; adds more than one feature to our clause!

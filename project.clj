@@ -5,7 +5,8 @@
             :url "http://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.5.1"]]
   :java-source-paths ["src/simplenlg"]
-  :resource-paths ["lib/junit-4.4.jar"
+  :resource-paths ["lib/simplenlg-v4.4.2.jar"
+                   "lib/junit-4.4.jar"
                    "lib/lexAccess2011dist.jar"
                    "lib/lexCheck2006api.jar"
                    "lib/lvg2001api.jar"])
