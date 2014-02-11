@@ -40,10 +40,8 @@ We can also add a determiner after the fact.
 (def park (noun "park"))
 
 (determiner "the" park)
-
 (determiner "that" park)
 ;;=> #<NPPhraseSpec...>
-
 ```
 
 We need more than the ability to define a large set of things. They need to do something. Let's define a verb phrase.
