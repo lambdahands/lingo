@@ -1,15 +1,8 @@
 (ns lingo.features
   (:import
-   (simplenlg.features
-    DiscourseFunction
-    Feature
-    Form
-    Gender
-    Inflection
-    InterrogativeType
-    NumberAgreement
-    Person
-    Tense)))
+   (simplenlg.features DiscourseFunction Feature
+    Form Gender Inflection InterrogativeType
+    NumberAgreement Person Tense)))
 
 (def ^:private forms
   (let [f-type #(Form/valueOf (name %))]
@@ -88,16 +81,8 @@
    :modal       (Feature/MODAL)
    :particle    (Feature/PARTICLE)})
 
-(defn feature
-  "Returns a vector containing a feature
-  along with its option."
-  [spec kind]
- (let [[feat opt] (features (keyword kind))]
-   [feat ((keyword spec) opt)]))
-
-(defn feature-fn [kind element]
-  [(feature-fns kind) element])
-
-(feature :first :person)
-
-(feature-fn :complement "in the house")
+(defn feature [spec kind]
+  (if (contains? feature-fns spec)
+    [(feature-fns spec) kind]
+    (let [[feat opt] (features (keyword kind))]
+      [feat ((keyword spec) opt)])))

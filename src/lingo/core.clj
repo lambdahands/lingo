@@ -1,105 +1,70 @@
 (ns lingo.core
-  (:use [lingo.features :only [feature feature-fn]])
-  (:import (simplenlg.framework NLGFactory)
+  (:use [lingo.features :only [feature]]
+        [clojure.core.match :only [match]])
+  (:import (simplenlg.framework NLGFactory CoordinatedPhraseElement)
            (simplenlg.lexicon Lexicon XMLLexicon)
-           (simplenlg.realiser.english Realiser)
-           (simplenlg.phrasespec)
-           (simplenlg.features Feature Tense)))
+           (simplenlg.realiser.english Realiser)))
 
-(def lexicon (atom (Lexicon/getDefaultLexicon)))
+(declare gen mod*)
 
-(defn set-xml-lexicon! [path]
-  (reset! lexicon (XMLLexicon. path)))
+(defn mod* [p o & [q]]
+  (let [obj (or q (atom o)), f (.getFactory o)]
+   (match [(:* p)]
+    [[:pre   r]] (.addPreModifier   o r)
+    [[:front r]] (.addFrontModifier o r)
+    [[:post  r]] (.addPostModifier  o r)
+    [([& rs] :seq)] (doseq [r rs] (mod* {:* r} o obj))
+    [{:> (:or :verb :noun :subject :object :clause)}]
+      (if (instance? CoordinatedPhraseElement @obj)
+        (.addCoordinate @obj (gen f (:* p)))
+        (reset! obj (.createCoordinatedPhrase f o (gen f (:* p)))))
+    [{:complement c}] (.addComplement o c)
+    [{:feature [a b]}] (.setFeature @obj a b)
+    [:plural]
+      (let [[a b] (feature :plural :numbers)]
+        (.setFeature @obj a b))
+    [r] (.addModifier o r))
+   @obj))
 
-(defn reset-lexicon! []
-  (reset! lexicon (Lexicon/getDefaultLexicon)))
+(defmulti modify (fn [p o] (p :>)))
+(defmethod modify :default [p o] o)
+(defmethod modify :noun    [p o] (if (:* p) (mod* p o) o))
+(defmethod modify :verb    [p o] (if (:* p) (mod* p o) o))
+(defmethod modify :clause  [p o] (if (:* p) (mod* p o) o))
 
-(defn noun
-  ([phrase]
-   (let [fact (NLGFactory. @lexicon)]
-     (.createNounPhrase fact phrase)))
-  ([determiner phrase]
-   (let [fact (NLGFactory. @lexicon)]
-     (.createNounPhrase fact determiner phrase))))
+(defn- noun [s f]
+  (match [s]
+    [[d n]] (doto (.createNounPhrase f n) (.setDeterminer d))
+    [n] (.createNounPhrase f n)))
 
-(defn determiner [det phrase]
-  (.setDeterminer phrase det)
-  phrase)
+(defmulti gen (fn [f x] (x :>)))
+(defmethod gen :default [f ps] ps)
+(defmethod gen :noun    [f ps] (modify ps (noun (:+ ps) f)))
+(defmethod gen :verb    [f ps] (modify ps (.createVerbPhrase f (:+ ps))))
+(defmethod gen :subject [f ps] (gen f (assoc ps :> :noun)))
+(defmethod gen :object  [f ps] (gen f (assoc ps :> :noun)))
 
-(defn verb
-  [phrase]
-  (let [fact (NLGFactory. @lexicon)]
-    (.createVerbPhrase fact phrase)))
+(defmethod gen :clause [f ps]
+  (let [c (.createClause f)]
+    (doseq [p (:+ ps)]
+      (condp = (:> p)
+        :subject (.setSubject c (gen f p))
+        :verb    (.setVerb    c (gen f p))
+        :object  (.setObject  c (gen f p))
+        :complement (.addComplement c (:+ p))))
+    (modify ps c)))
 
-(defn modifier
-  ([modi phrase]
-   (modifier modi phrase :default))
-  ([modi phrase kind]
-   (condp = (name kind)
-     "front" (.addFrontModifier phrase modi)
-     "pre"   (.addPreModifier phrase modi)
-     "post"  (.addPostModifier phrase modi)
-     (.addModifier phrase modi))
-   phrase))
+(defmethod gen :generator [n ps]
+  (let [f (NLGFactory. (:+ ps))
+        r (Realiser.   (:+ ps))]
+    {:> :generator
+     :name n
+     :factory f
+     :realiser r
+     :lexicon (:+ ps)
+     :* (partial gen f)
+     :! #(.realiseSentence r (gen f %))}))
 
-(defn realise [[real clause]]
-  (.realiseSentence real clause))
-
-(defn realise! [phrase]
-  (realise [(Realiser. @lexicon) phrase]))
-
-(defn sentence
-  "Create a simple sentence. This is the most
-  basic function we can execute with simplenlg.
-  We return a vector containing the realiser and
-  an DocumentElement object. (We'll be using this
-  pattern in further functions.)"
-  [string]
-  (let [lexi @lexicon
-        fact (NLGFactory. lexi)
-        real (Realiser. lexi)]
-    [real (.createSentence fact string)]))
-
-(defn make-clause
-  "We add a subject verb and object to
-  create a clause. Unlike our sentence from
-  before, our clause can be mutated (yuck!)
-  with additional subjects and objects."
-  [subj verb obj]
-  (let [lexi @lexicon
-        fact (NLGFactory. lexi)
-        real (Realiser. lexi)]
-    [real
-     (doto (.createClause fact)
-       (.setSubject subj)
-       (.setVerb verb)
-       (.setObject obj))]))
-
-(defn cons-clause
-  "Let's have some fun. Here we are able to
-  add or replace different parts of our clause."
-  [[real clause] [k v]]
-  (condp = k
-    :subject (.setSubject clause v)
-    :verb    (.setVerb clause v)
-    :object  (.setObject clause v)
-    :features
-    (doseq [[a b] v]
-      (.setFeature clause a b))
-    :complements
-    (doseq [compl v]
-      (.addComplement clause compl)))
-  [real clause])
-
-(defn gen-clause
-  "Since Clojure is the bees knees, we can continue
-  to build upon our functions in order to generate
-  clauses out of persistent data structures."
-  [table]
-  (let [lexi @lexicon
-        fact (NLGFactory. lexi)
-        real (Realiser. lexi)
-        clause (.createClause fact)]
-    (doseq [t (seq table)]
-      (cons-clause [real clause] t))
-    [real clause]))
+(defn make-gen [& [lex name]]
+  (let [id (or name (str (java.util.UUID/randomUUID)))]
+    (gen id {:> :generator :+ (or lex (Lexicon/getDefaultLexicon))})))
