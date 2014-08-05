@@ -7,6 +7,8 @@
 
 (declare gen mod*)
 
+(def lexicon (Lexicon/getDefaultLexicon))
+
 (defn mod* [p o & [q]]
   (let [obj (or q (atom o)), f (.getFactory o)]
    (match [(:* p)]
@@ -14,12 +16,13 @@
     [[:front r]] (.addFrontModifier o r)
     [[:post  r]] (.addPostModifier  o r)
     [([& rs] :seq)] (doseq [r rs] (mod* {:* r} o obj))
+    [{:complement c}] (.addComplement o c)
     [{:> (:or :verb :noun :subject :object :clause)}]
       (if (instance? CoordinatedPhraseElement @obj)
         (.addCoordinate @obj (gen f (:* p)))
         (reset! obj (.createCoordinatedPhrase f o (gen f (:* p)))))
-    [{:complement c}] (.addComplement o c)
-    [{:feature [a b]}] (.setFeature @obj a b)
+    [{:feature [a b]}]
+      (let [[c d] (feature a b)] (.setFeature @obj c d))
     [:plural]
       (let [[a b] (feature :plural :numbers)]
         (.setFeature @obj a b))
@@ -67,4 +70,4 @@
 
 (defn make-gen [& [lex name]]
   (let [id (or name (str (java.util.UUID/randomUUID)))]
-    (gen id {:> :generator :+ (or lex (Lexicon/getDefaultLexicon))})))
+    (gen id {:> :generator :+ (or lex lexicon)})))
