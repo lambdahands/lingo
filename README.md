@@ -5,7 +5,7 @@
 ## Usage
 
 1. Clone the repository to your local file system.
-2. Open a REPL.
+2. Run `lein repl` in the lingo directory.
 3. Do: `(use 'lingo.core)`
 4. And: `(use 'lingo.features)`
 5. Hack away!
@@ -13,175 +13,169 @@
 ## Todo
 
 - Test custom lexicons.
-- Add support for multiple subjects, verbs, and objects.
 - Integrate core.logic in some bizarre and amazing way (meters anyone?)
-- Define multi-clause functions.
 - Much, much more...
 
 ## Walkthrough
 
-We compose our language around basic building blocks called phrases. Here's a simple noun phrase.
+**This walkthrough is available as a Clojure file you can go through interactively in the examples directory.**
+
+
+Lingo's pieces comprise Clojure data structures. Maps are the primary structure used to express each part of speech we're interested in.
+
+For example, an empty clause looks like this:
 
 ```clojure
-(noun "Fred")
-;;=> #<NPPhraseSpec...>
+{:> :clause}
 ```
 
-Noun phrases often go along with a reference to their context. For example, "the park" uses what's known as a determiner.
+The key `:>` is the identifier key. It tells us what kind of part we plan on generating. Here are other parts we're able to generate:
 
 ```clojure
-(noun "the" "park")
-;;=> #<NPPhraseSpec...>
+{:> :noun}
+{:> :verb}
+{:> :subject}
+{:> :object}
 ```
 
-We can also add a determiner after the fact.
+Generating any of these parts will create empty phrases. To do something more useful, we're able to "add" specific pieces to our parts.
+
+A noun can simply pass a string or a vector of two strings, the first being what's known as the determiner ("the", "a", or "that") and the second being the actual phrase.
 
 ```clojure
-(def park (noun "park"))
-
-(determiner "the" park)
-(determiner "that" park)
-;;=> #<NPPhraseSpec...>
+{:> :noun :+ "dog"}
 ```
 
-We need more than the ability to define a large set of things. They need to do something. Let's define a verb phrase.
-
 ```clojure
-(verb "run")
-;;=> #<VPPhraseSpec...>
+{:> :noun :+ ["the" "dog"]}
 ```
 
-Our verbs can be more specific as well. We add modifiers to express other attributes of actions. We can add as many as we want.
+;; However verbs accept only one string.
 
 ```clojure
-(modifier "quickly" (verb "run"))
-;;=> #<VPPhraseSpec...>
-
-(modifier "for thirty seconds" (modifier "quickly" (verb "run")))
-;;=> #<VPPhraseSpec...>
+{:> :verb :+ "run"}
 ```
 
-The same rule applies to our noun phrases.
+Subjects and objects are only nouns, but they're used to specifically create clauses. Clauses take a vector of one of each a subject, object and verb as well as many complements as you wish.  We'll cover complements soon.
 
 ```clojure
-(modifier "happy" (noun "Fred"))
-;;=> #<NPPhraseSpec...>
-
-(modifier "dancing" (modifier "happy" (verb "Fred")))
-;;=> #<NPPhraseSpec...>
+(def dog-and-rabbit
+  {:> :clause
+   :+ [{:> :subject :+ ["the" "dog"]}
+       {:> :verb    :+ "chase"}
+       {:> :object  :+ ["the" "rabbit"]}]})
 ```
 
-The computer groups our noun and verb phrases into a few different categories. So far, we've seen `#<NPPhraseSpec>` and `#<VPPhraseSpec>`. We can also define a plain sentence.
+In order to generate our pieces into speech, we need to create a generator.
 
 ```clojure
-(sentence "my cat might be feral")
-;; => [#<Realiser simplenlg.realiser...> #<DocumentElement...>]
+(def generator (make-gen))
 ```
 
-Doing so returns a vector containing a pair of elements. The first is our realiser, the component that is fed a lexicon in order to reason about our language. The second is the element to be realised. Our computer realises the sentence and outputs a string.
+The generator contains two primary functions, accessed as keys to
+a Clojure map.
+
+The first creates SimpleNLG objects. Once created, you can use
+Java methods to access fields and (not recommended!) mutate them.
 
 ```clojure
-(realise (sentence "my cat might be feral"))
-;; => "My cat might be feral."
+(:* generator)
 ```
 
-Clauses are made up of a subject, verb, and object. We can define them just in that order.
+The second realises- or "renders"- our speech into a sentence.  It's recommended to do as many operations on Clojure data structures before passing them to the generator.
 
 ```clojure
-(make-clause "Fred" "run" "the race")
-;; => [#<Realiser simplenlg.realiser...> #<SPhraseSpec...>]
+(:! generator)
 ```
 
-We realise our clauses just as we did with sentences.
+We pass the realisation function to our dog and rabbit clause to see the generated result.
 
 ```clojure
-(realise (make-clause "Fred" "run" "the race"))
-;; => "Jack runs the race."
+((:! generator) dog-and-rabbit)
+;; => "The dog chases the rabbit."
 ```
 
-We can also realise our nouns and verbs, but we have to be more forceful.
+We can manipulate our clauses just as maps, and we can even make philosphical inqueries.
 
 ```clojure
-(realise! (noun "Fred"))
-;; => "Fred."
+((:! generator)
+ (assoc dog-and-rabbit :* {:feature [:why :?]}))
+;; => "Why does the dog chase the rabbit?"
 ```
 
-Unlike sentences, we can do a great deal to influence the way our computer realises our clauses. Here we use a feature. Think of a feature as a modifer for clauses. Let's define a function that takes any clause and puts it in the past tense.
+By assoc-ing the :\* key with a feature, we were able to turn our statement into a question. The :\ key is known as the modifier key.
+
+Modifiers can be a great deal of different things. Here are several examples of what you can pass as the :\* key
 
 ```clojure
-;; In this example we will call the features directly from Google's library.
-(import '(simplenlg.features Feature Tense))
-
-(defn past-tense-clause [[real clause]]
-  (.setFeature clause (Feature/TENSE) (Tense/PAST))
-  [real clause])
-
-(realise (past-tense-clause (make-clause "Fred" "run" "the race")))
-;; => "Fred ran the race."
+{:> :verb :+ "run" :* "quickly"} ;; Adds an adverb
 ```
 
-Simple clauses can be constructed directly with strings; however, there's another way to create clauses.
-
 ```clojure
-(def my-clause
-  (make-clause (noun "Fred")
-               (modifier "quickly" (verb "run"))
-               (modifier "long" (noun "the" "race"))))
-
-(realise my-clause)
-;; => "Fred quickly runs the long race."
-
-(realise (past-tense-clause my-clause))
-;; => "Fred quickly ran the long race."
+{:> :noun :+ "dog" :* "confused"} ;; Adds an adjective
 ```
 
-Thankfully there's a convenient and idiomatic way to call features.
-
 ```clojure
-(feature :first :person)
-;; => ["person" #<Person FIRST>]
+{:> :noun
+ :+ "management"
+ :* [:pre "time"]} ;; A pre-modifier resides before the phrase.
 ```
 
-We can construct clauses by running them together. Anything we've already defined will be replaced.
-
 ```clojure
-(realise
- (cons-clause
-  (make-clause "Jack" "run" "the race")
-  [:subject "Fred"]))
-;; => "Fred runs the race."
+{:> :noun
+ :+ "management"
+ :* [:post "time"]} ;; A post-modifier resides after the phrase.
 ```
 
-We can nest clauses to construct them. Also, our constructor function knows what to do with features.
+Complements are similar to modifiers, but they can represent general phrases.
 
 ```clojure
-(realise
-   (cons-clause
-    (cons-clause
-     (make-clause "Jack" "run" "the race") [:subject "Fred"])
-    [:features [(feature :past :tense) (feature :how :?)]]))
-;; => "How did Fred run the race?"
+(def park-chase
+  (assoc dog-and-rabbit :* {:complement "around the park"}))
 ```
 
-We have another function to generate our clauses through construction.
-
 ```clojure
-(realise (gen-clause
-  {:subject "Fred"
-   :verb "run"
-   :object "the race"
-   :features [(feature :past :tense) (feature :how :?)]}))
-;; => "How does Fred run the race?"
+((:! generator) park-chase)
+;; => "The dog chases the rabbit around the park."
 ```
 
-We can also add complements to our clauses. These can come in the form of prepositions, that-clauses, adjective phrases, or adverb phrases.
+We can also add as many features and complements, in any order, as we like.
 
 ```clojure
-(realise (gen-clause
-  {:subject "Fred"
-   :verb "run"
-   :object "the race"
-   :features [(feature :past :tense) (feature :how :?)]
-   :complements ["so quickly" "without getting tired"]}))
-;; => "How did Fred run the race so quickly without getting tired?"
+((:! generator)
+ (merge
+   dog-and-rabbit
+   {:* [{:feature [:how :?]}
+        {:feature [:is :perfect]}
+        {:feature [:future :tense]}
+        {:complement "around the park"}]}))
+;; => "How will the dog have chased the rabbit around the park?"
+```
+
+Modifiers can even be other parts to create coordinated phrases.
+
+```clojure
+((:! generator)
+ {:> :noun :+ "Jack"
+  :* [{:> :noun :+ "Wendy"}
+      {:> :noun :+ "Danny"}]})
+;; => "Jack, Wendy and Danny."
+```
+
+We can combine all of these pieces to create well known phrases.
+
+```clojure
+(def redrum
+  {:> :clause
+   :+ [{:> :subject
+        :+ "work"
+        :* [{:> :noun :+ "play" :* [:pre "no"]}
+            [:pre "all"]]}
+       {:> :verb :+ "make"}
+       {:> :object :+ "Jack"}
+       {:> :complement :+ "a dull boy"}]
+   :* {:feature [:base-infinitive :form]}})
+
+((:! generator) redrum)
+;; => "All work and no play makes Jack a dull boy."
 ```

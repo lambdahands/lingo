@@ -59,7 +59,7 @@
 
 ;; The second realises- or "renders"- our speech into a sentence.
 ;; It's recommended to do as many operations on Clojure data
-;; structures before passing them to these functions.
+;; structures before passing them to the generator.
 
 (:! generator)
 
