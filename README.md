@@ -18,7 +18,7 @@
 
 ## Walkthrough
 
-**This walkthrough is available as a Clojure file you can go through interactively in the examples directory.**
+**This walkthrough is available as a Clojure file in the examples directory. It's encouraged that you go through it interactively.**
 
 
 Lingo's pieces comprise Clojure data structures. Maps are the primary structure used to express each part of speech we're interested in.
@@ -103,16 +103,16 @@ We can manipulate our clauses just as maps, and we can even make philosphical in
 ;; => "Why does the dog chase the rabbit?"
 ```
 
-By assoc-ing the :\* key with a feature, we were able to turn our statement into a question. The :\ key is known as the modifier key.
+By assoc-ing the `:*` key with a feature, we were able to turn our statement into a question. The `:*` key is known as the modifier key.
 
-Modifiers can be a great deal of different things. Here are several examples of what you can pass as the :\* key
+Modifiers can be a great deal of different things. Here are several examples of what you can pass as the `:*` key:
 
 ```clojure
-{:> :verb :+ "run" :* "quickly"} ;; Adds an adverb
+{:> :verb :+ "run" :* "quickly"} ;; Add an adverb
 ```
 
 ```clojure
-{:> :noun :+ "dog" :* "confused"} ;; Adds an adjective
+{:> :noun :+ "dog" :* "confused"} ;; Add an adjective
 ```
 
 ```clojure
@@ -127,7 +127,7 @@ Modifiers can be a great deal of different things. Here are several examples of 
  :* [:post "time"]} ;; A post-modifier resides after the phrase.
 ```
 
-Complements are similar to modifiers, but they can represent general phrases.
+Complements are similar to modifiers, but they can represent phrases in a general sense, from simple adverbs to prepositional phrases. In linguistics, a complement [loosely defined as anything that comes after the verb](http://en.wikipedia.org/wiki/Complement_(linguistics\)).
 
 ```clojure
 (def park-chase
@@ -139,7 +139,7 @@ Complements are similar to modifiers, but they can represent general phrases.
 ;; => "The dog chases the rabbit around the park."
 ```
 
-We can also add as many features and complements, in any order, as we like.
+We can add as many features and complements, in any order, as we like.
 
 ```clojure
 ((:! generator)
