@@ -50,7 +50,7 @@ A noun can simply pass a string or a vector of two strings, the first being what
 {:> :noun :+ ["the" "dog"]}
 ```
 
-;; However verbs accept only one string.
+However verbs accept only one string.
 
 ```clojure
 {:> :verb :+ "run"}
@@ -127,7 +127,7 @@ Modifiers can be a great deal of different things. Here are several examples of 
  :* [:post "time"]} ;; A post-modifier resides after the phrase.
 ```
 
-Complements are similar to modifiers, but they can represent phrases in a general sense, from simple adverbs to prepositional phrases. In linguistics, a complement [loosely defined as anything that comes after the verb](http://en.wikipedia.org/wiki/Complement_(linguistics\)).
+Complements are similar to modifiers, but they can represent phrases in a general sense, from simple adverbs to prepositional phrases. In linguistics, a complement [loosely defined as anything that comes after the verb](http://en.wikipedia.org/wiki/Complement_(linguistics)).
 
 ```clojure
 (def park-chase
