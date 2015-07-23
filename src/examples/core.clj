@@ -86,13 +86,15 @@
 
 {:> :noun :+ "dog" :* "confused"} ;; Adds an adjective
 
-{:> :noun
- :+ "management"
- :* [:pre "time"]} ;; A pre-modifier resides before the phrase.
+((:! generator)
+ {:> :noun
+  :+ "management"
+  :* [:pre "time"]}) ;; A pre-modifier resides before the phrase.
 
-{:> :noun
- :+ "management"
- :* [:post "time"]} ;; A post-modifier resides after the phrase.
+((:! generator)
+ {:> :noun
+  :+ "management"
+  :* [:post "time"]}) ;; A post-modifier resides after the phrase.
 
 ;; Complements are similar to modifiers, but they can represent
 ;; general phrases.

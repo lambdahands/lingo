@@ -5,69 +5,86 @@
            (simplenlg.lexicon Lexicon XMLLexicon)
            (simplenlg.realiser.english Realiser)))
 
-(declare gen mod*)
+(declare gen modify!)
 
 (def lexicon (Lexicon/getDefaultLexicon))
 
-(defn mod* [p o & [q]]
-  (let [obj (or q (atom o)), f (.getFactory o)]
-   (match [(:* p)]
-    [[:pre   r]] (.addPreModifier   o r)
-    [[:front r]] (.addFrontModifier o r)
-    [[:post  r]] (.addPostModifier  o r)
-    [([& rs] :seq)] (doseq [r rs] (mod* {:* r} o obj))
-    [{:complement c}] (.addComplement o c)
-    [{:> (:or :verb :noun :subject :object :clause)}]
-      (if (instance? CoordinatedPhraseElement @obj)
-        (.addCoordinate @obj (gen f (:* p)))
-        (reset! obj (.createCoordinatedPhrase f o (gen f (:* p)))))
-    [{:feature [a b]}]
-      (let [[c d] (feature a b)] (.setFeature @obj c d))
-    [:plural]
-      (let [[a b] (feature :plural :numbers)]
-        (.setFeature @obj a b))
-    [r] (.addModifier o r))
-   @obj))
+(defn modify!
+  ([phrase object]
+   (modify! phrase object (atom object)))
+  ([phrase object object-ref]
+   (let [factory (.getFactory object)]
+     (match [(:* phrase)]
+       [[:pre modifier]]   (.addPreModifier   object modifier)
+       [[:front modifier]] (.addFrontModifier object modifier)
+       [[:post  modifier]] (.addPostModifier  object modifier)
+       [([& modifiers] :seq)]
+         (doseq [modifier modifiers]
+           (modify! {:* modifier} object object-ref))
+       [{:complement complement}] (.addComplement object complement)
+       [{:> (:or :verb :noun :subject :object :clause)}]
+         (if (instance? CoordinatedPhraseElement @object-ref)
+           (.addCoordinate @object-ref (gen factory (:* phrase)))
+           (let [cont (gen factory (:* phrase))
+                 phrase (.createCoordinatedPhrase factory object cont)]
+             (reset! object-ref phrase)))
+       [{:feature [kind ident]}]
+         (let [[feature spec] (feature kind ident)]
+           (.setFeature @object-ref feature spec))
+       [:plural]
+         (let [[feature spec] (feature :plural :numbers)]
+           (.setFeature @object-ref feature spec))
+       [modifier] (.addModifier object modifier))
+     @object-ref)))
 
-(defmulti modify (fn [p o] (p :>)))
-(defmethod modify :default [p o] o)
-(defmethod modify :noun    [p o] (if (:* p) (mod* p o) o))
-(defmethod modify :verb    [p o] (if (:* p) (mod* p o) o))
-(defmethod modify :clause  [p o] (if (:* p) (mod* p o) o))
+(defmulti modify (fn [phrase object] (:> phrase)))
+(defmethod modify :default [phrase object] object)
+(defmethod modify :noun [phrase object]
+  (if (:* phrase) (modify! phrase object) object))
+(defmethod modify :verb [phrase object]
+  (if (:* phrase) (modify! phrase object) object))
+(defmethod modify :clause [phrase object]
+  (if (:* phrase) (modify! phrase object) object))
 
-(defn- noun [s f]
-  (match [s]
-    [[d n]] (doto (.createNounPhrase f n) (.setDeterminer d))
-    [n] (.createNounPhrase f n)))
+(defn- noun [phrase factory]
+  (match [phrase]
+    [[determiner noun]]
+      (doto (.createNounPhrase factory noun)
+        (.setDeterminer determiner))
+    [noun] (.createNounPhrase factory noun)))
 
-(defmulti gen (fn [f x] (x :>)))
-(defmethod gen :default [f ps] ps)
-(defmethod gen :noun    [f ps] (modify ps (noun (:+ ps) f)))
-(defmethod gen :verb    [f ps] (modify ps (.createVerbPhrase f (:+ ps))))
-(defmethod gen :subject [f ps] (gen f (assoc ps :> :noun)))
-(defmethod gen :object  [f ps] (gen f (assoc ps :> :noun)))
+(defmulti gen (fn [factory phrase] (:> phrase)))
+(defmethod gen :default [factory phrase] phrase)
+(defmethod gen :noun    [factory phrase]
+  (modify phrase (noun (:+ phrase) factory)))
+(defmethod gen :verb    [factory phrase]
+  (modify phrase (.createVerbPhrase factory (:+ phrase))))
+(defmethod gen :subject [factory phrase]
+  (gen factory (assoc phrase :> :noun)))
+(defmethod gen :object  [factory phrase]
+  (gen factory (assoc phrase :> :noun)))
 
-(defmethod gen :clause [f ps]
-  (let [c (.createClause f)]
-    (doseq [p (:+ ps)]
-      (condp = (:> p)
-        :subject (.setSubject c (gen f p))
-        :verb    (.setVerb    c (gen f p))
-        :object  (.setObject  c (gen f p))
-        :complement (.addComplement c (:+ p))))
-    (modify ps c)))
+(defmethod gen :clause [factory phrases]
+  (let [clause (.createClause factory)]
+    (doseq [phrase (:+ phrases)]
+      (condp = (:> phrase)
+        :subject (.setSubject clause (gen factory phrase))
+        :verb    (.setVerb    clause (gen factory phrase))
+        :object  (.setObject  clause (gen factory phrase))
+        :complement (.addComplement clause (:+ phrase))))
+    (modify phrases clause)))
 
-(defmethod gen :generator [n ps]
-  (let [f (NLGFactory. (:+ ps))
-        r (Realiser.   (:+ ps))]
+(defmethod gen :generator [name lexicon]
+  (let [factory (NLGFactory. (:+ lexicon))
+        realiser (Realiser.   (:+ lexicon))]
     {:> :generator
-     :name n
-     :factory f
-     :realiser r
-     :lexicon (:+ ps)
-     :* (partial gen f)
-     :! #(.realiseSentence r (gen f %))}))
+     :name name
+     :factory factory
+     :realiser realiser
+     :lexicon (:+ lexicon)
+     :* (partial gen factory)
+     :! #(.realiseSentence realiser (gen factory %))}))
 
-(defn make-gen [& [lex name]]
+(defn make-gen [& [lexicon- name]]
   (let [id (or name (str (java.util.UUID/randomUUID)))]
-    (gen id {:> :generator :+ (or lex lexicon)})))
+    (gen id {:> :generator :+ (or lexicon- lexicon)})))
