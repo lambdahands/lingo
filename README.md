@@ -1,6 +1,6 @@
 # lingo
 
-"A Clojure natural language generator built on top of Google's simplenlg library."
+A Clojure natural language generator built on top of University of Aberdeen’s [SimpleNLG library](https://github.com/simplenlg/simplenlg).
 
 ## Usage
 
